@@ -37,10 +37,10 @@ def check_tokens() -> bool:
 def send_message(bot, message) -> None:
     """Send message in telegram."""
     try:
-        logging.info('Отправки статуса в telegram')
+        logging.debug('Отправки статуса в telegram')
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-    except telegram.error.TelegramError as error:
-        raise exceptions.TelegramError(f'Статус не отправлен: {error}')
+    except Exception as error:
+        raise logging.error(f'Статус не отправлен: {error}')
     else:
         logging.info('Статус отправлен')
 
@@ -84,7 +84,7 @@ def check_response(response) -> list:
         raise exceptions.EmptyResponseFromAPI('Пустой ответ от API')
     homeworks = response.get('homeworks')
     if not isinstance(homeworks, list):
-        raise KeyError('Homeworks не является списком')
+        raise TypeError('Homeworks не является списком')
     return homeworks
 
 
@@ -96,59 +96,58 @@ def parse_status(homework) -> str:
     if 'homework_name' not in homework:
         raise KeyError('В ответе отсутсвует ключ homework_name')
     homework_name = homework.get('homework_name')
-    homework_status = homework.get('status')
-    if homework_status not in HOMEWORK_VERDICTS:
-        raise ValueError(f'Неизвестный статус работы - {homework_status}')
+    homework_verdict = homework.get('status')
+    if homework_verdict not in HOMEWORK_VERDICTS:
+        raise ValueError(f'Неизвестный статус работы - {homework_verdict}')
     return(
         'Изменился статус проверки работы "{homework_name}" {verdict}'
     ).format(
         homework_name=homework_name,
-        verdict=HOMEWORK_VERDICTS[homework_status]
+        verdict=HOMEWORK_VERDICTS[homework_verdict]
     )
 
 
 def main():
     """The main logic of the bot."""
     if not check_tokens():
-        logging.critical('Отсутствует необходимое кол-во'
-                         ' токенов')
-        sys.exit('Отсутсвуют токены')
+        message = 'Отсутствует токен. Бот остановлен!'
+        logging.critical(message)
+        sys.exit(message)
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    timestamp = int(time.time())
-    report = {
-        'name': '',
-        'output': ''
-    }
-    prev_report = report.copy()
+    current_timestamp = int(time.time())
+    start_message = 'Бот начал работу'
+    send_message(bot, start_message)
+    logging.info(start_message)
+    prev_msg = ''
 
     while True:
         try:
-            response = get_api_answer(timestamp)
-            timestamp = response.get(
-                'current_data', timestamp)
-            new_homeworks = check_response(response)
-            if new_homeworks:
-                homework = new_homeworks[0]
-                report['name'] = homework.get('homework_name')
-                report['output'] = homework.get('status')
+            response = get_api_answer(current_timestamp)
+            current_timestamp = response.get(
+                'current_date', int(time.time())
+            )
+            homeworks = check_response(response)
+            if homeworks:
+                message = parse_status(homeworks[0])
             else:
-                report['output'] = 'Нет новых статусов работ.'
-            if report != prev_report:
-                send = f' {report["name"]}, {report["output"]}'
-                send_message(bot, send)
-                prev_report = report.copy()
+                message = 'Нет новых статусов'
+            if message != prev_msg:
+                send_message(bot, message)
+                prev_msg = message
             else:
-                logging.debug('Статус не поменялся')
+                logging.info(message)
+
         except exceptions.NotForSending as error:
             message = f'Сбой в работе программы: {error}'
-            logging.error(message)
+            logging.error(message, exc_info=True)
+
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            report['output'] = message
-            logging.error(message)
-            if report != prev_report:
+            logging.error(message, exc_info=True)
+            if message != prev_msg:
                 send_message(bot, message)
-                prev_report = report.copy
+                prev_msg = message
+
         finally:
             time.sleep(RETRY_PERIOD)
 
