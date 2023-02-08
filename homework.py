@@ -30,16 +30,12 @@ HOMEWORK_VERDICTS = {
 
 
 def check_tokens() -> bool:
-    """
-    check if all tokens are present
-    """
+    """Check if all tokens are present."""
     return all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID])
 
 
 def send_message(bot, message) -> None:
-    """
-    send message in telegram.
-    """
+    """Send message in telegram."""
     try:
         logging.info('Отправки статуса в telegram')
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
@@ -48,7 +44,12 @@ def send_message(bot, message) -> None:
     else:
         logging.info('Статус отправлен')
 
+
 def get_api_answer(timestamp):
+    """
+    Adjust the API request and view the list of homework.
+    Also check that the endpoint returns status 200.
+    """
     nowtime = timestamp or int(time.time())
     params_request = {
         'url': ENDPOINT,
@@ -74,10 +75,8 @@ def get_api_answer(timestamp):
         raise exceptions.WrongResponseCode(message, error)
 
 
-def check_response(response)  -> list:
-    """
-    Сhecks the API response against the documentation
-    """
+def check_response(response) -> list:
+    """Сhecks the API response against the documentation."""
     logging.debug('Начало проверки')
     if not isinstance(response, dict):
         raise TypeError('Ошибка в типе ответа API')
@@ -90,9 +89,10 @@ def check_response(response)  -> list:
 
 
 def parse_status(homework) -> str:
-    '''
-    retrieves the status of a specific job from the database and sends the result to Telegram
-    '''
+    """
+    Retrieves the status of a specific job from the database.
+    and sends the result to Telegram.
+    """
     if 'homework_name' not in homework:
         raise KeyError('В ответе отсутсвует ключ homework_name')
     homework_name = homework.get('homework_name')
@@ -108,9 +108,7 @@ def parse_status(homework) -> str:
 
 
 def main():
-    """
-    The main logic of the bot.
-    """
+    """The main logic of the bot."""
     if not check_tokens():
         logging.critical('Отсутствует необходимое кол-во'
                          ' токенов')
@@ -125,9 +123,9 @@ def main():
 
     while True:
         try:
-            response = get_api_answer(current_timestamp)
-            current_timestamp = response.get(
-                'current_data', current_timestamp)
+            response = get_api_answer(timestamp)
+            timestamp = response.get(
+                'current_data', timestamp)
             new_homeworks = check_response(response)
             if new_homeworks:
                 homework = new_homeworks[0]
@@ -154,10 +152,11 @@ def main():
         finally:
             time.sleep(RETRY_PERIOD)
 
+
 if __name__ == '__main__':
     logging.basicConfig(
         level=logging.INFO,
-        filename='main.log', 
+        filename='main.log',
         format='%(asctime)s, %(levelname)s, %(name)s, %(message)s'
     )
     main()
