@@ -50,11 +50,11 @@ def get_api_answer(timestamp):
     Adjust the API request and view the list of homework.
     Also check that the endpoint returns status 200.
     """
-    nowtime = timestamp or int(time.time())
+    now_time = timestamp or int(time.time())
     params_request = {
         'url': ENDPOINT,
         'headers': HEADERS,
-        'params': {'from_date': nowtime},
+        'params': {'from_date': now_time},
     }
     try:
         logging.info(
@@ -62,17 +62,17 @@ def get_api_answer(timestamp):
             'headers = {headers},'
             'params = {params}'.format(**params_request))
         homework_statuses = requests.get(**params_request)
-        if homework_statuses.status_code != HTTPStatus.OK:
-            raise exceptions.InvalidResponseCode(
-                'Ответ API не возвращает 200, '
-                f'ошибка: {homework_statuses.status_code}'
-                f'причина: {homework_statuses.reason}'
-                f'текст: {homework_statuses.text}')
-        return homework_statuses.json()
     except Exception as error:
         message = ('API не возвращает 200. Запрос: {url}, {headers}, {params}.'
                    ).format(**params_request)
         raise exceptions.WrongResponseCode(message, error)
+    if homework_statuses.status_code != HTTPStatus.OK:
+        raise exceptions.InvalidResponseCode(
+            'Ответ API не возвращает 200, '
+            f'ошибка: {homework_statuses.status_code}'
+            f'причина: {homework_statuses.reason}'
+            f'текст: {homework_statuses.text}')
+    return homework_statuses.json()
 
 
 def check_response(response) -> list:
@@ -85,6 +85,10 @@ def check_response(response) -> list:
     homeworks = response.get('homeworks')
     if not isinstance(homeworks, list):
         raise TypeError('Homeworks не является списком')
+    if not homeworks:
+        raise exceptions.EmptyResponseFromAPI('Список homeworks пуст')
+    if not isinstance(homeworks[0], dict):
+        raise TypeError('Первый элемент homeworks должен быть словарем')
     return homeworks
 
 
@@ -136,10 +140,6 @@ def main():
                 prev_msg = message
             else:
                 logging.info(message)
-
-        except exceptions.NotForSending as error:
-            message = f'Сбой в работе программы: {error}'
-            logging.error(message, exc_info=True)
 
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
